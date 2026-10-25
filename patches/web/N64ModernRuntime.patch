@@ -405,7 +405,7 @@ index 59acf58..77e7d3a 100644
 +    target_compile_definitions(ultramodern PRIVATE ULTRAMODERN_LOADS_WAIT_FOR_DISPLAY_LISTS=1)
 +endif()
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index a2fc449..95cb2a0 100644
+index a2fc449..84cbd98 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -182,6 +182,143 @@ uint64_t total_vis = 0;
@@ -578,6 +578,18 @@ index a2fc449..95cb2a0 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
+@@ -289,6 +441,11 @@ void sp_complete() {
+ }
+ 
+ void dp_complete() {
++    // Sent already if the renderer sent it before send_dl returned (ultramodern::renderer::rdp_done).
++    if (ultramodern::renderer::take_rdp_done()) {
++        return;
++    }
++
+     uint8_t* rdram = events_context.rdram;
+     std::lock_guard lock{ events_context.message_mutex };
+     ultramodern::enqueue_external_message_src(events_context.dp.mq, events_context.dp.msg, false, ultramodern::EventMessageSource::Dp);
 diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
 index 45e1e87..74003ce 100644
 --- a/ultramodern/src/mesgqueue.cpp
@@ -764,10 +776,18 @@ index b2e375c..8fbc05f 100644
  
  extern "C" void osDestroyThread(RDRAM_ARG PTR(OSThread) t_) {
 diff --git a/ultramodern/src/timer.cpp b/ultramodern/src/timer.cpp
-index 68a63d0..10d5c21 100644
+index 68a63d0..00d8150 100644
 --- a/ultramodern/src/timer.cpp
 +++ b/ultramodern/src/timer.cpp
-@@ -37,6 +37,38 @@ static uint32_t speed_den = 1;
+@@ -3,6 +3,7 @@
+ #include <thread>
+ #include <variant>
+ #include <set>
++#include <unordered_map>
+ #include "blockingconcurrentqueue.h"
+ 
+ #include "ultramodern/ultra64.h"
+@@ -37,6 +38,38 @@ static uint32_t speed_den = 1;
  static uint64_t clock_base_ticks = 0;                                               // the counter at the last change
  static std::chrono::high_resolution_clock::time_point clock_base_time = start_time; // the instant of the last change
  
@@ -806,7 +826,7 @@ index 68a63d0..10d5c21 100644
  struct OSTimer {
      PTR(OSTimer) unused1;
      PTR(OSTimer) unused2;
-@@ -58,7 +90,7 @@ using Action = std::variant<AddTimerAction, RemoveTimerAction>;
+@@ -58,7 +91,7 @@ using Action = std::variant<AddTimerAction, RemoveTimerAction>;
  
  struct TimerContext {
      std::thread thread;
@@ -815,3 +835,85 @@ index 68a63d0..10d5c21 100644
  };
  // Pokemon Snap port: never destroyed (see clock_mutex above).
  static TimerContext& timer_context = *new TimerContext();
+@@ -95,10 +128,73 @@ uint64_t time_now() {
+     return clock_base_ticks + duration_to_ticks(std::chrono::high_resolution_clock::now() - clock_base_time, speed_num, speed_den);
+ }
+ 
++#if defined(__EMSCRIPTEN__)
++// The timer thread's active timers, ordered by a copy of each one's timestamp taken as it is inserted, not by the
++// timestamp in the OSTimer: osSetTimer writes that on the game's thread as it is called, and a game that restarts a
++// timer still pending (osStopTimer, then osSetTimer, as Banjo-Tooie's scheduler does at each retrace with two timers)
++// moved it inside a set ordered by it while it was there. Out of order, the set's erase missed it, so the timer stayed
++// first and fired at every pass with no wait, its messages held for a full queue (ULTRAMODERN_HOLD_BLOCKED_MESSAGES)
++// faster than the game took them: the game thread receiving them never blocked again, the threads below it never ran,
++// and the held messages took the heap at about 13 MB a second to Aborted(OOM). A timer is still pending at its restart
++// only where the timer thread runs late, which on a phone's slow cores it does at a level change. It has the calls the
++// timer thread makes on a std::set, so the thread's loop is the same either way.
++class TimerSet {
++public:
++    TimerSet(RDRAM_ARG1) : rdram(rdram) {}
++
++    bool empty() const {
++        return timers.empty();
++    }
++
++    // The first entry, the timer closest to running out.
++    auto begin() const {
++        return timers.begin();
++    }
++
++    // Adds a timer at its timestamp now, in place of where it was if it is active already.
++    void insert(PTR(OSTimer) timer_) {
++        erase(timer_);
++        OSTime timestamp = TO_PTR(OSTimer, timer_)->timestamp;
++        timers.insert(Entry{ timestamp, timer_ });
++        keys[timer_] = timestamp;
++    }
++
++    void erase(PTR(OSTimer) timer_) {
++        auto found = keys.find(timer_);
++        if (found != keys.end()) {
++            timers.erase(Entry{ found->second, timer_ });
++            keys.erase(found);
++        }
++    }
++
++private:
++    // An entry reads as its timer, as a std::set<PTR(OSTimer)>'s does.
++    struct Entry {
++        OSTime timestamp;
++        PTR(OSTimer) timer;
++
++        operator PTR(OSTimer)() const {
++            return timer;
++        }
++
++        bool operator<(const Entry& other) const {
++            return timestamp != other.timestamp ? timestamp < other.timestamp : timer < other.timer;
++        }
++    };
++
++    uint8_t* rdram;
++    std::set<Entry> timers{};
++    std::unordered_map<PTR(OSTimer), OSTime> keys{};
++};
++#endif
++
+ void timer_thread(RDRAM_ARG1) {
+     ultramodern::set_native_thread_name("Timer Thread");
+     ultramodern::set_native_thread_priority(ultramodern::ThreadPriority::VeryHigh);
+ 
++#if defined(__EMSCRIPTEN__)
++    TimerSet active_timers{PASS_RDRAM1};
++#else
+     // Lambda comparator function to keep the set ordered
+     auto timer_sort = [PASS_RDRAM1](PTR(OSTimer) a_, PTR(OSTimer) b_) {
+         OSTimer* a = TO_PTR(OSTimer, a_);
+@@ -115,6 +211,7 @@ void timer_thread(RDRAM_ARG1) {
+ 
+     // Ordered set of timers that are currently active
+     std::set<PTR(OSTimer), decltype(timer_sort)> active_timers{timer_sort};
++#endif
+     
+     // Lambda to process a timer action to handle adding and removing timers
+     auto process_timer_action = [&](const Action& action) {
