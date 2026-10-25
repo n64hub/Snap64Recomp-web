@@ -16,6 +16,7 @@ rt64 src/hle/rt64_rsp.cpp
 rt64 src/hle/rt64_state.cpp
 rt64 src/hle/rt64_state.h
 rt64 src/hle/rt64_vi.cpp
+rt64 src/hle/rt64_vi.h
 rt64 src/hle/rt64_workload_queue.cpp
 rt64 src/render/rt64_raster_shader.cpp
 rt64 src/render/rt64_raster_shader.h
