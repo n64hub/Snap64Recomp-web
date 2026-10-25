@@ -178,9 +178,10 @@ every one in full.
   Mods and Game pages to the game's own Options screen, drawn in the game's own
   font. The Graphics page has seventeen rows in three groups, the
   display, the picture and the fixes, from Render Scale to Jynx Recolor.
-* **Widescreen** shows more of the course: a wider field of view that
-  fills the window's own shape, 16:9, the Deck's 16:10 or an ultrawide 21:9,
-  not a stretched picture. The title, the lab and the menus stay 4:3.
+* **Widescreen** shows more of the course, and of the forest film the title
+  opens with: a wider field of view that fills the window's own shape, 16:9,
+  the Deck's 16:10 or an ultrawide 21:9, not a stretched picture. The title,
+  the lab and the menus stay 4:3: their pictures end at the 4:3 screen's edges.
 * **Higher frame rates**, matched to your display or set to a rate you
   choose. The game's own logic still runs at its thirty frames a second;
   the renderer draws the frames in between (frame interpolation).

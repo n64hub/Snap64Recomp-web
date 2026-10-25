@@ -152,6 +152,9 @@ HOOKED = [
     # the game's symbols do not name: skipped while the pages from anywhere
     # hold the music with the screen (src/overlay_hook.cpp).
     'manualfunc_8002E2F8',
+    # The title's film, widened by Widescreen while it plays
+    # (src/overlay_hook.cpp).
+    'func_800E5D2C_A0D2BC',
 ]
 
 # Calls inserted INSIDE a recompiled function, at a named guest address.

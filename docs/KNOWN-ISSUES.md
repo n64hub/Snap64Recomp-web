@@ -51,6 +51,16 @@ television's overscan hid part of the last sliver. The port keeps the rule
 as the cartridge has it; the Widescreen patch widens its horizontal bound to
 the wider picture, and nothing else.
 
+## The title film's first shot is dark at the far left in a wide window
+
+Widescreen widens the forest film the game plays before its title. The
+film's land, sky and mountains were built for what a 4:3 camera sees, and
+in its first shot, under the Nintendo logo, the sky ends a little past the
+4:3 picture's left edge: at 16:9 and wider a dark strip stands at the far
+left until the camera turns away, a few seconds in. Every later shot is
+built past the wide picture's edges. Widescreen off draws the film as the
+console does.
+
 ## A Nintendo pad over Bluetooth may answer a moment late after a pause
 
 The Switch Online N64 controller is one of these pads. SDL's own driver

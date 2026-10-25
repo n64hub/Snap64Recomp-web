@@ -45,6 +45,13 @@ namespace snap {
     // exactly what a player feels as a stutter.
     std::atomic<bool> g_app_level_resident = { false };
 
+    // True while the title's film plays: the boy in the forest the main
+    // menu's scene shows before its title and between attract demos, a 3D
+    // scene that Widescreen widens as it does a course
+    // (rt64_render_context.cpp, wide_wanted). Set by the film's routine
+    // below, since the title's code, loaded once, holds both.
+    std::atomic<bool> g_title_film = { false };
+
     // The ROM start of the scene overlay loaded last: the title's, the
     // lab's, the Report's, a ride's level code, the credits'. The pages from
     // anywhere open only on screens that hold still without harm
@@ -278,4 +285,15 @@ extern "C" void manualfunc_8002E2F8(uint8_t* rdram, recomp_context* ctx) {
         }
     }
     __real_manualfunc_8002E2F8(rdram, ctx);
+}
+
+// The title's film (the decomp's src/main_menu/A0BE70.c, func_800E5D2C): it
+// builds the forest, the boy and its cameras, waits for the film to end or
+// for Start, ends it and deletes all of it, and returns to the title. The
+// main menu's scene runs it at boot and again between attract demos, so the
+// time inside it is the film, and nothing 2D of the title's is on screen.
+extern "C" void func_800E5D2C_A0D2BC(uint8_t* rdram, recomp_context* ctx) {
+    snap::g_title_film.store(true, std::memory_order_relaxed);
+    __real_func_800E5D2C_A0D2BC(rdram, ctx);
+    snap::g_title_film.store(false, std::memory_order_relaxed);
 }
