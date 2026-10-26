@@ -54,9 +54,12 @@ Left Shift Z, Enter Start, E R, IJKL the C buttons; the mouse aims the camera on
   canvas's own shape, as every recomp's page opens. A player can still turn it off in the menu. A page's settings saved
   before that default hold the Off its first boot wrote, which no player chose, so a file without the
   `web_widescreen_default` key a page now writes opens widescreen once (`src/settings.cpp`).
-- **Render to RAM stays on, with the exact copy**: the game scores a photo from the frame it has just drawn, and the
-  camera's focus dot is found in that same frame, so a copy a display list late would score the frame before
-  (`src/settings.h`, `render_to_ram`).
+- **Render to RAM stays on, with the exact copy but in the title's film and attract demo**: a course's focus dot is
+  found in the frame just drawn, and Oak's check, the album and the report score a photo from the buffer it was just
+  rendered into, so a copy a display list late would score the frame before (`src/settings.h`, `render_to_ram`).
+  Nothing scores the film's frames or the demo's, whose camera follows its script, so while either runs the copy lands
+  a list late (RT64's `renderToRAMLate`, `src/rt64_render_context.cpp`): on a phone the exact copy's wait for the GPU
+  was half of the film's display list time.
 - **The object manager's threads.** HAL's object manager runs each object's process on a thread of its own, which
   stops itself (`ohWait`) until the next frame starts it again. The runtime's libultra thread stop, on with
   Emscripten, ignored a start of a thread that had stopped itself, and the page stopped after the game's second frame;

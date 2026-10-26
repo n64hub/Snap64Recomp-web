@@ -18,6 +18,7 @@
 #include "ultramodern/ultramodern.hpp"
 #include "ultramodern/config.hpp"
 
+#include "input.h"
 #include "paths.h"
 #include "settings.h"
 #include "steam_deck.h"
@@ -591,6 +592,20 @@ public:
         // NOT caused by this reset.
         // Kept in sync every list so F6 takes effect immediately.
         app_->state->setRenderToRAM(snap::settings().render_to_ram ? 1 : 0);
+#if defined(__EMSCRIPTEN__)
+        // On a page the copy back lands a list late while the title's film
+        // or its attract demo runs (RT64's renderToRAMLate), so this thread
+        // doesn't wait for the GPU to finish each frame: on a phone that wait
+        // was half of the film's list time. Nothing of either is scored: the
+        // demo's camera follows its script and takes no photo. Everywhere
+        // else the copy stays exact: a course's focus dot is found in the
+        // frame just drawn, and Oak's check, the album and the report score
+        // a photo from the buffer it was just rendered into, outside a course.
+        // The list is processed on this thread, so the choice is this list's;
+        // a copy still pending lands at the next list's start either way.
+        app_->emulatorConfig.framebuffer.renderToRAMLate =
+            snap::g_title_film.load(std::memory_order_relaxed) || snap::input_attract_demo();
+#endif
         app_->workloadQueue->snapInterpolateCamera.store(snap::settings().interpolate_camera, std::memory_order_relaxed);
         app_->workloadQueue->ubershadersOnly = snap::settings().ubershaders_only;
 

@@ -117,6 +117,10 @@ bool input_take_menu_request();
 // them for the pad's A and B (input.cpp).
 bool input_deck_keys_ignored();
 
+// True while the title's attract demo plays a course from its recorded
+// script: nobody holds the camera and no photo is taken (input.cpp).
+bool input_attract_demo();
+
 // Lets the cursor go at once (a dialog is about to take the screen); the
 // next input_update_mouse_capture takes it back if a course still runs.
 // Main thread.

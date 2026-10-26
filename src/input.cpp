@@ -734,6 +734,11 @@ bool source_down(const Source& src, const uint8_t* keys, uint32_t held, int64_t 
 
 } // namespace
 
+bool input_attract_demo() {
+    return g_app_level_resident.load(std::memory_order_relaxed) && (g_rdram != nullptr) &&
+           (read_s32(g_rdram, ADDR_gIdleScript) != 0);
+}
+
 static bool is_steam_deck_pad(SDL_GameController* gc);
 
 bool input_deck_keys_ignored() {
