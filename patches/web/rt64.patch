@@ -1720,6 +1720,19 @@ index b317ab5..0922dd3 100644
                  }
              }
  
+diff --git a/src/hle/rt64_shared_queue_resources.h b/src/hle/rt64_shared_queue_resources.h
+index d555d2e..415d82d 100644
+--- a/src/hle/rt64_shared_queue_resources.h
++++ b/src/hle/rt64_shared_queue_resources.h
+@@ -39,6 +39,8 @@ namespace RT64 {
+         uint32_t swapChainRate = 0;
+         hlslpp::float2 resolutionScale = 1.0f;
+         uint32_t targetRate = 0;
++        std::atomic<uint32_t> pacedRate = 0;
++        std::atomic<uint32_t> prebuildWaits = 0;
+         UserConfiguration userConfig;
+         EnhancementConfiguration enhancementConfig;
+         EmulatorConfiguration emulatorConfig;
 diff --git a/src/hle/rt64_state.cpp b/src/hle/rt64_state.cpp
 index 6d41c9a..e920d76 100644
 --- a/src/hle/rt64_state.cpp

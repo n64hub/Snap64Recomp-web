@@ -14,6 +14,7 @@ rt64 src/hle/rt64_present_queue.cpp
 rt64 src/hle/rt64_present_queue.h
 rt64 src/hle/rt64_rdp.cpp
 rt64 src/hle/rt64_rsp.cpp
+rt64 src/hle/rt64_shared_queue_resources.h
 rt64 src/hle/rt64_state.cpp
 rt64 src/hle/rt64_state.h
 rt64 src/hle/rt64_vi.cpp
