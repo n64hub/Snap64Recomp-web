@@ -377,10 +377,10 @@ index 037f15f..deb40e5 100644
      hook_slots.clear();
      processed_hook_slots.clear();
 diff --git a/ultramodern/CMakeLists.txt b/ultramodern/CMakeLists.txt
-index 59acf58..77e7d3a 100644
+index 59acf58..599e838 100644
 --- a/ultramodern/CMakeLists.txt
 +++ b/ultramodern/CMakeLists.txt
-@@ -40,3 +40,23 @@ if (WIN32)
+@@ -40,3 +40,30 @@ if (WIN32)
  endif()
  
  
@@ -404,11 +404,60 @@ index 59acf58..77e7d3a 100644
 +if (ULTRAMODERN_LOADS_WAIT_FOR_DISPLAY_LISTS OR EMSCRIPTEN)
 +    target_compile_definitions(ultramodern PRIVATE ULTRAMODERN_LOADS_WAIT_FOR_DISPLAY_LISTS=1)
 +endif()
++
++# The VI thread queues a VI's screen update after it swaps in the framebuffer the game gave it, not before
++# (src/events.cpp, vi_thread_func).
++option(ULTRAMODERN_SCREEN_UPDATE_AFTER_VI "A VI's screen update queued after its framebuffer swap (always on with Emscripten)" OFF)
++if (ULTRAMODERN_SCREEN_UPDATE_AFTER_VI OR EMSCRIPTEN)
++    target_compile_definitions(ultramodern PRIVATE ULTRAMODERN_SCREEN_UPDATE_AFTER_VI=1)
++endif()
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index a2fc449..84cbd98 100644
+index a2fc449..f7faae1 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
-@@ -182,6 +182,143 @@ uint64_t total_vis = 0;
+@@ -54,6 +54,24 @@ struct ViState {
+ #define VI_STATE_BLACK 0x20
+ #define VI_STATE_REPEATLINE 0x40
+ 
++// The graphics thread's actions, taken in the order they were queued, whichever thread queued them. A moodycamel queue
++// keeps one thread's order only: each thread queues into a list of its own, and a dequeue takes from the list that
++// holds the most. The VI thread queues its ScreenUpdateAction for the framebuffer it showed before it moves on to the
++// next one, and a game then draws its next frame into that framebuffer: its graphics task could run first, and the
++// screen showed the framebuffer with the next frame's first lists drawn into it (Mario Party 1's flash of a new scene
++// before its star wipe opens, 9 presents in 12,225 on a busy host). Every thread queues through one producer token.
++struct ActionQueue : moodycamel::BlockingConcurrentQueue<Action> {
++    moodycamel::ProducerToken token{ *this };
++    std::mutex mutex;
++
++    ActionQueue() {}
++
++    bool enqueue(Action action) {
++        std::lock_guard lock{ mutex };
++        return BlockingConcurrentQueue::enqueue(token, std::move(action));
++    }
++};
++
+ static struct {
+     struct {
+         std::thread thread;
+@@ -79,6 +97,7 @@ static struct {
+             if (next_mode == nullptr) {
+                 return;
+             }
++
+             const OSViCommonRegs* common_regs = &next_mode->comRegs;
+             const OSViFieldRegs* field_regs = &next_mode->fldRegs[field];
+             PTR(void) framebuffer = osVirtualToPhysical(next_state->framebuffer);
+@@ -139,7 +158,7 @@ static struct {
+     // The same message queue may be used for multiple events, so share a mutex for all of them
+     std::mutex message_mutex;
+     uint8_t* rdram;
+-    moodycamel::BlockingConcurrentQueue<Action> action_queue{};
++    ActionQueue action_queue{};
+     moodycamel::BlockingConcurrentQueue<OSTask*> sp_task_queue{};
+     moodycamel::ConcurrentQueue<OSThread*> deleted_threads{};
+ } events_context{};
+@@ -182,6 +201,143 @@ uint64_t total_vis = 0;
  
  
  extern std::atomic_bool exited;
@@ -552,7 +601,7 @@ index a2fc449..84cbd98 100644
  extern moodycamel::LightweightSemaphore graphics_shutdown_ready;
  
  void set_dummy_vi(bool odd);
-@@ -231,10 +368,25 @@ void vi_thread_func() {
+@@ -231,10 +387,25 @@ void vi_thread_func() {
              // printf("Skipping the next VI wait\n");
              next = std::chrono::high_resolution_clock::now();
          }
@@ -578,7 +627,28 @@ index a2fc449..84cbd98 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -289,6 +441,11 @@ void sp_complete() {
+@@ -249,12 +420,20 @@ void vi_thread_func() {
+             events_context.action_queue.enqueue(DummyWorkloadAction{events_context.vi.get_next_state()->framebuffer});
+         }
+ 
++#if ULTRAMODERN_SCREEN_UPDATE_AFTER_VI
++        // The screen update shows the framebuffer this VI swaps in, queued right behind the workloads that drew it and
++        // before the next frame's. Queued before the swap, it showed the one swapped in at the VI before: a VI late, after
++        // the next frame's first workloads, where RT64_GAME_FRAME_WORKLOADS ends a game frame at its framebuffer's present.
++        events_context.vi.update_vi();
++        events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
++#else
+         // Queue a screen update for the graphics thread with the current VI register state.
+         // Doing this before the VI update is equivalent to updating the screen after the previous frame's scanout finished.
+         events_context.action_queue.enqueue(ScreenUpdateAction{ events_context.vi.regs });
+ 
+         // Update VI registers and swap VI modes.
+         events_context.vi.update_vi();
++#endif
+ 
+         // If the game has started, handle sending VI and AI events.
+         if (ultramodern::is_game_started()) {
+@@ -289,6 +468,11 @@ void sp_complete() {
  }
  
  void dp_complete() {
