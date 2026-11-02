@@ -54,6 +54,9 @@ Left Shift Z, Enter Start, E R, IJKL the C buttons; the mouse aims the camera on
   canvas's own shape, as every recomp's page opens. A player can still turn it off in the menu. A page's settings saved
   before that default hold the Off its first boot wrote, which no player chose, so a file without the
   `web_widescreen_default` key a page now writes opens widescreen once (`src/settings.cpp`).
+- **Wide HUD** by default (`src/settings.h`), where the desktop build's is off: a page is played in a wide window,
+  where the film counter and the R and Z icons would hang at the 4:3 picture's edge. A saved `wide_hud` still wins, and
+  the Graphics page's Wide HUD row turns it off.
 - **Render to RAM stays on, with the exact copy but in the title's film and attract demo**: a course's focus dot is
   found in the frame just drawn, and Oak's check, the album and the report score a photo from the buffer it was just
   rendered into, so a copy a display list late would score the frame before (`src/settings.h`, `render_to_ram`).

@@ -169,7 +169,14 @@ struct Settings {
     // and off is the default, as every enhancement is.
     // Mailbox byte 0x80C0004D, the GRAPHICS page's Wide HUD row (field 16,
     // past the full bank at +0x08).
+#if defined(__EMSCRIPTEN__)
+    // On a page, on: a page is played in a wide window (widescreen is on
+    // above), where the cartridge's HUD would hang in mid-air. A saved
+    // wide_hud still wins, and the row still turns it off.
+    bool  wide_hud          = true;
+#else
     bool  wide_hud          = false;
+#endif
     // The Pokemon Snap Station on controller port 4 (snap_station.h): the
     // Blockbuster kiosk's sticker printer, which the retail cartridge knows
     // how to drive. On, the Gallery shows its Print button, and printing
