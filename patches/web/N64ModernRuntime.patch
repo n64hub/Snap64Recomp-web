@@ -1,5 +1,5 @@
 diff --git a/librecomp/src/mods.cpp b/librecomp/src/mods.cpp
-index 037f15f..deb40e5 100644
+index 5dce1fd..5a9d65b 100644
 --- a/librecomp/src/mods.cpp
 +++ b/librecomp/src/mods.cpp
 @@ -75,6 +75,9 @@ bool get_to_vec(const nlohmann::json& val, std::vector<T2>& out) {
@@ -12,7 +12,7 @@ index 037f15f..deb40e5 100644
  #else
  #   error "Unsupported architecture!"
  #endif
-@@ -455,7 +458,9 @@ void recomp::mods::DynamicLibraryCodeHandle::set_imported_function(size_t import
+@@ -471,7 +474,9 @@ void recomp::mods::DynamicLibraryCodeHandle::set_imported_function(size_t import
      }, func);
  }
  
@@ -23,7 +23,7 @@ index 037f15f..deb40e5 100644
      size_t reference_symbol_index = 0;
      for (const auto& section : context.sections) {
          for (const auto& reloc : section.relocs) {
-@@ -477,10 +482,35 @@ recomp::mods::CodeModLoadError recomp::mods::DynamicLibraryCodeHandle::populate_
+@@ -493,10 +498,35 @@ recomp::mods::CodeModLoadError recomp::mods::DynamicLibraryCodeHandle::populate_
      return CodeModLoadError::Good;
  }
  
@@ -59,7 +59,7 @@ index 037f15f..deb40e5 100644
      if (!regenerated) {
         section_addresses = std::make_unique<int32_t[]>(context.sections.size());
      }
-@@ -549,17 +579,23 @@ recomp::mods::LiveRecompilerCodeHandle::LiveRecompilerCodeHandle(
+@@ -565,17 +595,23 @@ recomp::mods::LiveRecompilerCodeHandle::LiveRecompilerCodeHandle(
              ultramodern::register_generated_code(generated_elsewhere, recompiler_output->code_size);
          }
      }
@@ -83,7 +83,7 @@ index 037f15f..deb40e5 100644
  void recomp::mods::LiveRecompilerCodeHandle::set_imported_function(size_t import_index, GenericFunction func) {
      std::visit(overloaded {
          [this, import_index](recomp_func_t* native_func) {
-@@ -591,8 +627,135 @@ recomp::mods::CodeModLoadError recomp::mods::LiveRecompilerCodeHandle::populate_
+@@ -607,8 +643,135 @@ recomp::mods::CodeModLoadError recomp::mods::LiveRecompilerCodeHandle::populate_
  recomp::mods::GenericFunction recomp::mods::LiveRecompilerCodeHandle::get_function_handle(size_t func_index) {
      return GenericFunction{ recompiler_output->functions[func_index] };
  }
@@ -219,7 +219,7 @@ index 037f15f..deb40e5 100644
      uint8_t* target_func_u8 = reinterpret_cast<uint8_t*>(target_func);
      size_t offset = 0;
  
-@@ -627,13 +790,20 @@ void patch_func(recomp_func_t* target_func, recomp::mods::GenericFunction replac
+@@ -651,9 +814,15 @@ void patch_func(recomp_func_t* target_func, recomp::mods::GenericFunction replac
  #endif
  
      protect(target_func_u8, old_flags);
@@ -235,12 +235,15 @@ index 037f15f..deb40e5 100644
      uint64_t old_flags;
      unprotect(target_func, &old_flags);
      memcpy(target_func, data.replaced_bytes.data(), data.replaced_bytes.size());
+@@ -663,6 +832,7 @@ void unpatch_func(void* target_func, const recomp::mods::PatchData& data) {
+     __builtin___clear_cache(restored, restored + data.replaced_bytes.size());
+ #endif
      protect(target_func, old_flags);
 +#endif
  }
  
  void recomp::mods::ModContext::add_opened_mod(ModManifest&& manifest, config::Config&& config, std::vector<size_t>&& game_indices, std::vector<ModContentTypeId>&& detected_content_types, std::vector<char>&& thumbnail) {
-@@ -673,6 +843,10 @@ void recomp::mods::ModContext::register_embedded_mod(const std::string &mod_id,
+@@ -702,6 +872,10 @@ void recomp::mods::ModContext::register_embedded_mod(const std::string &mod_id,
      embedded_mod_bytes.emplace(mod_id, mod_bytes);
  }
  
@@ -251,7 +254,7 @@ index 037f15f..deb40e5 100644
  void recomp::mods::ModContext::register_deprecated_mod(const std::string& mod_id, DeprecationStatus deprecation_status, const Version &maximum_version) {
      deprecated_mods[mod_id].status = deprecation_status;
      deprecated_mods[mod_id].maximum_version = maximum_version;
-@@ -2082,6 +2256,23 @@ std::vector<recomp::mods::ModLoadErrorDetails> build_regen_list(
+@@ -2111,6 +2285,23 @@ std::vector<recomp::mods::ModLoadErrorDetails> build_regen_list(
      return {};
  }
  
@@ -275,7 +278,7 @@ index 037f15f..deb40e5 100644
  std::unique_ptr<recomp::mods::LiveRecompilerCodeHandle> apply_regenlist(RegeneratedList& regenlist, std::span<const uint8_t> rom) {
      using namespace recomp::mods;
  
-@@ -2150,6 +2341,9 @@ std::vector<recomp::mods::ModLoadErrorDetails> recomp::mods::ModContext::regener
+@@ -2179,6 +2370,9 @@ std::vector<recomp::mods::ModLoadErrorDetails> recomp::mods::ModContext::regener
  
      // Apply the regenlist.
      if (!regenlist.functions.empty()) {
@@ -285,7 +288,7 @@ index 037f15f..deb40e5 100644
          regenerated_code_handle = apply_regenlist(regenlist, decompressed_rom);
          if (!regenerated_code_handle || !regenerated_code_handle->good()) {
              regenerated_code_handle.reset();
-@@ -2158,6 +2352,7 @@ std::vector<recomp::mods::ModLoadErrorDetails> recomp::mods::ModContext::regener
+@@ -2187,6 +2381,7 @@ std::vector<recomp::mods::ModLoadErrorDetails> recomp::mods::ModContext::regener
              });
              return ret;
          }
@@ -293,7 +296,7 @@ index 037f15f..deb40e5 100644
      }
  
      if (!regenlist.patched_hooks.empty()) {
-@@ -2198,6 +2393,9 @@ std::vector<recomp::mods::ModLoadErrorDetails> recomp::mods::ModContext::regener
+@@ -2227,6 +2422,9 @@ std::vector<recomp::mods::ModLoadErrorDetails> recomp::mods::ModContext::regener
          }
  
          // Apply the patched function regenlist.
@@ -303,7 +306,7 @@ index 037f15f..deb40e5 100644
          base_patched_code_handle = apply_regenlist(patch_regenlist, overlays::get_patch_binary());
          if (!base_patched_code_handle || !base_patched_code_handle->good()) {
              regenerated_code_handle.reset();
-@@ -2207,6 +2405,7 @@ std::vector<recomp::mods::ModLoadErrorDetails> recomp::mods::ModContext::regener
+@@ -2236,6 +2434,7 @@ std::vector<recomp::mods::ModLoadErrorDetails> recomp::mods::ModContext::regener
              });
              return ret;
          }
@@ -311,7 +314,7 @@ index 037f15f..deb40e5 100644
      }
  
      return ret;
-@@ -2264,6 +2463,10 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::init_mod_code(uint8_t*
+@@ -2293,6 +2492,10 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::init_mod_code(uint8_t*
  
      std::span<uint8_t> binary_span {reinterpret_cast<uint8_t*>(binary_data.data()), binary_data.size() };
  
@@ -322,7 +325,7 @@ index 037f15f..deb40e5 100644
      // Parse the symbol file into the recompiler context.
      N64Recomp::ModSymbolsError symbol_load_error = N64Recomp::parse_mod_symbols(syms_data, binary_span, section_vrom_map, *mod.recompiler_context);
      if (symbol_load_error != N64Recomp::ModSymbolsError::Good) {
-@@ -2435,17 +2638,31 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::load_mod_code(uint8_t*
+@@ -2464,17 +2667,31 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::load_mod_code(uint8_t*
          .reference_section_addresses = section_addresses,
      };
  
@@ -356,7 +359,7 @@ index 037f15f..deb40e5 100644
          // Hooks can't be generated for native mods, so return an error if any of the functions this mod replaces are also hooked by another mod.
          if (!entry_func_hooks.empty() || !return_func_hooks.empty()) {
              return CodeModLoadError::OfflineModHooked;
-@@ -2714,7 +2931,9 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::resolve_code_dependenci
+@@ -2743,7 +2960,9 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::resolve_code_dependenci
  
          // Copy the original bytes so they can be restored later after the mod is unloaded.
          PatchData& cur_replacement_data = patched_funcs[to_replace];
@@ -366,7 +369,7 @@ index 037f15f..deb40e5 100644
          cur_replacement_data.mod_id = mod.manifest.mod_id;
  
          // Patch the function to redirect it to the replacement.
-@@ -2729,6 +2948,9 @@ void recomp::mods::ModContext::unload_mods() {
+@@ -2758,6 +2977,9 @@ void recomp::mods::ModContext::unload_mods() {
          unpatch_func(reinterpret_cast<void*>(replacement_func), replacement_data);
      }
      patched_funcs.clear();
@@ -412,7 +415,7 @@ index 59acf58..599e838 100644
 +    target_compile_definitions(ultramodern PRIVATE ULTRAMODERN_SCREEN_UPDATE_AFTER_VI=1)
 +endif()
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index a2fc449..f7faae1 100644
+index ecdf156..cb7b4dd 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -54,6 +54,24 @@ struct ViState {
@@ -601,7 +604,7 @@ index a2fc449..f7faae1 100644
  extern moodycamel::LightweightSemaphore graphics_shutdown_ready;
  
  void set_dummy_vi(bool odd);
-@@ -231,10 +387,25 @@ void vi_thread_func() {
+@@ -251,10 +407,25 @@ void vi_thread_func() {
              // printf("Skipping the next VI wait\n");
              next = std::chrono::high_resolution_clock::now();
          }
@@ -627,7 +630,7 @@ index a2fc449..f7faae1 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -249,12 +420,20 @@ void vi_thread_func() {
+@@ -269,12 +440,20 @@ void vi_thread_func() {
              events_context.action_queue.enqueue(DummyWorkloadAction{events_context.vi.get_next_state()->framebuffer});
          }
  
@@ -648,7 +651,7 @@ index a2fc449..f7faae1 100644
  
          // If the game has started, handle sending VI and AI events.
          if (ultramodern::is_game_started()) {
-@@ -289,6 +468,11 @@ void sp_complete() {
+@@ -309,6 +488,11 @@ void sp_complete() {
  }
  
  void dp_complete() {
@@ -846,7 +849,7 @@ index b2e375c..8fbc05f 100644
  
  extern "C" void osDestroyThread(RDRAM_ARG PTR(OSThread) t_) {
 diff --git a/ultramodern/src/timer.cpp b/ultramodern/src/timer.cpp
-index 68a63d0..00d8150 100644
+index f3faf94..4280884 100644
 --- a/ultramodern/src/timer.cpp
 +++ b/ultramodern/src/timer.cpp
 @@ -3,6 +3,7 @@
@@ -857,9 +860,9 @@ index 68a63d0..00d8150 100644
  #include "blockingconcurrentqueue.h"
  
  #include "ultramodern/ultra64.h"
-@@ -37,6 +38,38 @@ static uint32_t speed_den = 1;
- static uint64_t clock_base_ticks = 0;                                               // the counter at the last change
+@@ -38,6 +39,38 @@ static uint64_t clock_base_ticks = 0;
  static std::chrono::high_resolution_clock::time_point clock_base_time = start_time; // the instant of the last change
+ static bool clock_held = false;                                                     // set_clock_held: the counter stands at clock_base_ticks
  
 +#if defined(__EMSCRIPTEN__)
 +// The timer thread's queue, whose wait_dequeue_timed ends at its time. On a page a timed wait can end long after its
@@ -896,7 +899,7 @@ index 68a63d0..00d8150 100644
  struct OSTimer {
      PTR(OSTimer) unused1;
      PTR(OSTimer) unused2;
-@@ -58,7 +91,7 @@ using Action = std::variant<AddTimerAction, RemoveTimerAction>;
+@@ -63,7 +96,7 @@ using Action = std::variant<AddTimerAction, RemoveTimerAction, WakeAction>;
  
  struct TimerContext {
      std::thread thread;
@@ -905,7 +908,7 @@ index 68a63d0..00d8150 100644
  };
  // Pokemon Snap port: never destroyed (see clock_mutex above).
  static TimerContext& timer_context = *new TimerContext();
-@@ -95,10 +128,73 @@ uint64_t time_now() {
+@@ -107,10 +140,73 @@ uint64_t time_now() {
      return clock_base_ticks + duration_to_ticks(std::chrono::high_resolution_clock::now() - clock_base_time, speed_num, speed_den);
  }
  
@@ -979,7 +982,7 @@ index 68a63d0..00d8150 100644
      // Lambda comparator function to keep the set ordered
      auto timer_sort = [PASS_RDRAM1](PTR(OSTimer) a_, PTR(OSTimer) b_) {
          OSTimer* a = TO_PTR(OSTimer, a_);
-@@ -115,6 +211,7 @@ void timer_thread(RDRAM_ARG1) {
+@@ -127,6 +223,7 @@ void timer_thread(RDRAM_ARG1) {
  
      // Ordered set of timers that are currently active
      std::set<PTR(OSTimer), decltype(timer_sort)> active_timers{timer_sort};

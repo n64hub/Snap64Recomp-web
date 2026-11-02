@@ -5,6 +5,8 @@
 # merged from N64Recomp-browser a54586882247fffd45a66646f0fbccd4f0c86b86
 rt64 CMakeLists.txt
 rt64 src/gbi/rt64_gbi_rdp.cpp
+rt64 src/gui/rt64_file_dialog.cpp
+rt64 src/hle/rt64_application.cpp
 rt64 src/hle/rt64_framebuffer_manager.cpp
 rt64 src/hle/rt64_framebuffer_manager.h
 rt64 src/hle/rt64_framebuffer_pair.cpp
@@ -25,6 +27,7 @@ rt64 src/render/rt64_raster_shader.cpp
 rt64 src/render/rt64_raster_shader.h
 rt64 src/render/rt64_raster_shader_cache.cpp
 rt64 src/render/rt64_raster_shader_cache.h
+rt64 src/render/rt64_shader_library.cpp
 rt64 src/shaders/RasterPS.hlsl
 rt64 src/shaders/RasterVS.hlsl
 rt64 src/shaders/TextureDecodeCS.hlsl

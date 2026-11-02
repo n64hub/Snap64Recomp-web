@@ -19,6 +19,8 @@
 #include <cmath>
 #include <emscripten.h>
 #include <emscripten/threading.h>
+#elif defined(__ANDROID__)
+#include "android.h"
 #else
 #include <nfd.h>
 #endif
@@ -325,6 +327,7 @@ bool ensure_rom(uint64_t expected_hash) {
             printf("[SNAP] ROM: the player chose Quit; the game cannot start without the file\n");
             return false;
         }
+#if !defined(__ANDROID__)
         if (NFD_Init() != NFD_OKAY) {
             const char* err = NFD_GetError();
             printf("[SNAP] ROM: the file chooser could not open (%s)\n", err ? err : "no reason given");
@@ -332,6 +335,7 @@ bool ensure_rom(uint64_t expected_hash) {
                  std::string(kRomName) + ".");
             return false;
         }
+#endif
     }
 
     bool done = false;
@@ -344,6 +348,18 @@ bool ensure_rom(uint64_t expected_hash) {
             }
             chosen = std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(hook)));
         } else {
+#if defined(__ANDROID__)
+            // The system's document picker, through the activity
+            // (android.cpp): a copy of the document in the app's cache,
+            // removed once examined.
+            const std::string picked = android_pick_document();
+            if (picked.empty()) {
+                printf("[SNAP] ROM: the chooser was canceled; the game cannot start without the file\n");
+                tell("The game cannot run without the file. Start it again when you have it.");
+                return false;
+            }
+            chosen = std::filesystem::path(picked);
+#else
             nfdu8char_t* out = nullptr;
             const nfdu8filteritem_t filters[] = { { "N64 ROM", "z64,v64,n64" } };
             const nfdresult_t r = NFD_OpenDialogU8(&out, filters, 1, nullptr);
@@ -363,16 +379,25 @@ bool ensure_rom(uint64_t expected_hash) {
             }
             chosen = std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(out)));
             NFD_FreePathU8(out);
+#endif
         }
 
         Examined e = examine(chosen, expected_hash);
+#if defined(__ANDROID__)
+        if (!hook) {
+            std::error_code rmEc;
+            std::filesystem::remove(chosen, rmEc);
+        }
+#endif
         if (!e.ok) {
             printf("[SNAP] ROM: %s refused: %s\n", utf8(chosen).c_str(), e.problem.c_str());
             if (hook) {
                 return false;
             }
             if (!ask(e.problem + "\n\nChoose another file?", "Choose again", "Quit")) {
+#if !defined(__ANDROID__)
                 NFD_Quit();
+#endif
                 return false;
             }
             continue;
@@ -384,7 +409,9 @@ bool ensure_rom(uint64_t expected_hash) {
             if (!hook) {
                 tell("The file could not be copied to " + utf8(dest) + ": " + why + ".\n\nPut it there yourself, named " +
                      std::string(kRomName) + ", or start with SNAP_DATA_DIR set to a folder that can be written.");
+#if !defined(__ANDROID__)
                 NFD_Quit();
+#endif
             }
             return false;
         }
@@ -392,7 +419,9 @@ bool ensure_rom(uint64_t expected_hash) {
         done = true;
     }
     if (!hook) {
+#if !defined(__ANDROID__)
         NFD_Quit();
+#endif
     }
     fflush(stdout);
     return true;

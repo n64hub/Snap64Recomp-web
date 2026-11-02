@@ -46,7 +46,9 @@
 #include "version.h"
 
 #include <SDL.h>
-#if !defined(__EMSCRIPTEN__)
+#if defined(__ANDROID__)
+#include "android.h"
+#elif !defined(__EMSCRIPTEN__)
 #include <nfd.h>
 #endif
 
@@ -608,6 +610,13 @@ bool mods_pick_and_install() {
 #if defined(__EMSCRIPTEN__)
         // A page takes no mods (no live recompiler), so it has nothing to pick.
         return false;
+#elif defined(__ANDROID__)
+        // The system's document picker, one file at a time (android.cpp): a
+        // copy in the app's cache, removed once installed.
+        const std::string picked = android_pick_document();
+        if (!picked.empty()) {
+            files.push_back(picked);
+        }
 #else
         if (NFD_Init() != NFD_OKAY) {
             const char* err = NFD_GetError();
@@ -640,6 +649,12 @@ bool mods_pick_and_install() {
     fflush(stdout);
     for (const std::string& f : files) {
         mods_drop_file(f.c_str());
+#if defined(__ANDROID__)
+        if (getenv("SNAP_PICK_TEST") == nullptr) {
+            std::error_code ec;
+            fs::remove(fs::u8path(f), ec);
+        }
+#endif
     }
     return !files.empty();
 }

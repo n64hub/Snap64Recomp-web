@@ -103,6 +103,8 @@ add_executable(Snap64Recomp
     src/rsp_microcode.cpp
     src/audio.cpp
     src/input.cpp
+    src/touch_controls.cpp
+    src/android_thermal.cpp
     src/os_stubs.cpp
     src/overlay_hook.cpp
     src/matrix_tags.cpp
