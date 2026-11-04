@@ -1,5 +1,5 @@
 diff --git a/librecomp/src/mods.cpp b/librecomp/src/mods.cpp
-index 5dce1fd..5a9d65b 100644
+index 5dce1fd..744be93 100644
 --- a/librecomp/src/mods.cpp
 +++ b/librecomp/src/mods.cpp
 @@ -75,6 +75,9 @@ bool get_to_vec(const nlohmann::json& val, std::vector<T2>& out) {
@@ -325,16 +325,20 @@ index 5dce1fd..5a9d65b 100644
      // Parse the symbol file into the recompiler context.
      N64Recomp::ModSymbolsError symbol_load_error = N64Recomp::parse_mod_symbols(syms_data, binary_span, section_vrom_map, *mod.recompiler_context);
      if (symbol_load_error != N64Recomp::ModSymbolsError::Good) {
-@@ -2464,17 +2667,31 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::load_mod_code(uint8_t*
+@@ -2464,17 +2667,35 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::load_mod_code(uint8_t*
          .reference_section_addresses = section_addresses,
      };
  
 +    // Code recompiled ahead of time and linked in (register_precompiled_mod).
 +    if (mod.precompiled_code != nullptr) {
++#if !defined(IS_WASM)
 +        // Hooks can't be added to it either.
 +        if (!entry_func_hooks.empty() || !return_func_hooks.empty()) {
 +            return CodeModLoadError::OfflineModHooked;
 +        }
++#endif
++        // In WebAssembly a replacement is a redirect, and the hooks on the function it replaces run around it
++        // (resolve_code_dependencies), as the live recompiler would add them to its code.
 +
 +        mod.code_handle = std::make_unique<PrecompiledCodeHandle>(*mod.precompiled_code, *mod.recompiler_context, handle_inputs);
 +        if (!mod.code_handle->good()) {
@@ -359,7 +363,7 @@ index 5dce1fd..5a9d65b 100644
          // Hooks can't be generated for native mods, so return an error if any of the functions this mod replaces are also hooked by another mod.
          if (!entry_func_hooks.empty() || !return_func_hooks.empty()) {
              return CodeModLoadError::OfflineModHooked;
-@@ -2743,7 +2960,9 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::resolve_code_dependenci
+@@ -2743,11 +2964,26 @@ recomp::mods::CodeModLoadError recomp::mods::ModContext::resolve_code_dependenci
  
          // Copy the original bytes so they can be restored later after the mod is unloaded.
          PatchData& cur_replacement_data = patched_funcs[to_replace];
@@ -369,7 +373,24 @@ index 5dce1fd..5a9d65b 100644
          cur_replacement_data.mod_id = mod.manifest.mod_id;
  
          // Patch the function to redirect it to the replacement.
-@@ -2758,6 +2977,9 @@ void recomp::mods::ModContext::unload_mods() {
+         patch_func(to_replace, mod.code_handle->get_function_handle(replacement.func_index));
++#if defined(IS_WASM)
++        // The hooks on the function it replaces run around the replacement (load_mod_code): another mod's, or this one's
++        // own (a mod may hook a function it replaces itself).
++        Redirect& redirect = add_redirect(to_replace);
++        auto find_entry_it = hook_slots.find(HookDefinition{ replacement.original_section_vrom, replacement.original_vram, false });
++        if (find_entry_it != hook_slots.end()) {
++            redirect.entry_hook = find_entry_it->second;
++        }
++        auto find_return_it = hook_slots.find(HookDefinition{ replacement.original_section_vrom, replacement.original_vram, true });
++        if (find_return_it != hook_slots.end()) {
++            redirect.return_hook = find_return_it->second;
++        }
++#endif
+     }
+ 
+     return CodeModLoadError::Good;
+@@ -2758,6 +2994,9 @@ void recomp::mods::ModContext::unload_mods() {
          unpatch_func(reinterpret_cast<void*>(replacement_func), replacement_data);
      }
      patched_funcs.clear();
@@ -380,10 +401,10 @@ index 5dce1fd..5a9d65b 100644
      hook_slots.clear();
      processed_hook_slots.clear();
 diff --git a/ultramodern/CMakeLists.txt b/ultramodern/CMakeLists.txt
-index 59acf58..599e838 100644
+index 59acf58..9b74c6a 100644
 --- a/ultramodern/CMakeLists.txt
 +++ b/ultramodern/CMakeLists.txt
-@@ -40,3 +40,30 @@ if (WIN32)
+@@ -40,3 +40,37 @@ if (WIN32)
  endif()
  
  
@@ -414,8 +435,15 @@ index 59acf58..599e838 100644
 +if (ULTRAMODERN_SCREEN_UPDATE_AFTER_VI OR EMSCRIPTEN)
 +    target_compile_definitions(ultramodern PRIVATE ULTRAMODERN_SCREEN_UPDATE_AFTER_VI=1)
 +endif()
++
++# No VI comes while the graphics thread has spent over 100 ms on one action, so a game can't step its logic past a list
++# the renderer is still reading (src/events.cpp, renderer_stalled).
++option(ULTRAMODERN_VIS_WAIT_FOR_RENDERER "No VI while the renderer is stalled in one action (always on with Emscripten)" OFF)
++if (ULTRAMODERN_VIS_WAIT_FOR_RENDERER OR EMSCRIPTEN)
++    target_compile_definitions(ultramodern PRIVATE ULTRAMODERN_VIS_WAIT_FOR_RENDERER=1)
++endif()
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index ecdf156..cb7b4dd 100644
+index ecdf156..0114927 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -54,6 +54,24 @@ struct ViState {
@@ -460,7 +488,7 @@ index ecdf156..cb7b4dd 100644
      moodycamel::BlockingConcurrentQueue<OSTask*> sp_task_queue{};
      moodycamel::ConcurrentQueue<OSThread*> deleted_threads{};
  } events_context{};
-@@ -182,6 +201,143 @@ uint64_t total_vis = 0;
+@@ -182,6 +201,182 @@ uint64_t total_vis = 0;
  
  
  extern std::atomic_bool exited;
@@ -601,13 +629,58 @@ index ecdf156..cb7b4dd 100644
 +}
 +#endif
 +
++#if ULTRAMODERN_VIS_WAIT_FOR_RENDERER
++// The VI thread sends no VI while the graphics thread has spent more than a few VIs on one action. The thread tells the
++// game its RSP task is done before the renderer reads the list (gfx_thread_func), and a console's RSP has read it a few
++// ms later, so a game can step its logic every VI whatever its lists do: Paper Mario's runs before it checks how many
++// tasks are pending, which holds back only its drawing. On a page the renderer's thread can stop for seconds in one
++// list, waiting for a readback while the browser builds pipelines (Firefox builds them in line with the device, 4-10 s
++// for a section of the prebuilt shader list). Paper Mario's attract demo went on to its next map in that time, and the
++// list the renderer was still reading pointed at what the map's load had put there since: a function pointer read
++// 0x00010001 and the page trapped, or it trapped in malloc, or it stopped drawing. Held, the game sees the stall as a
++// console would never show it, one long VI.
++// Both sides touch only lines a game fork's own patches to this file leave alone (DKR-R-web's rewrite the VI messages'
++// block and the graphics thread's actions).
++namespace {
++    // The graphics thread's turns of its loop: waiting for an action, it comes round every 1 ms (a timed wait's tick in
++    // Firefox, 15.6 ms). A count, not a time: a time read on one thread and one read on another don't agree on a page
++    // in Firefox (each worker's own performance.timeOrigin), so only the VI thread's own clock times it.
++    std::atomic<uint32_t> renderer_loop_turns{ 0 };
++
++    // Six VIs: a list or screen update takes a few ms, and on a phone 10-90 ms at the first list of a new screen.
++    constexpr std::chrono::milliseconds renderer_stall_limit{ 100 };
++
++    // Whether the graphics thread has made no turn for renderer_stall_limit, as the VI thread (its only caller) has seen.
++    // None before its loop's first turn.
++    bool renderer_stalled() {
++        static uint32_t seen_turns = 0;
++        static std::chrono::steady_clock::time_point seen_time{};
++        const uint32_t turns = renderer_loop_turns.load();
++        const auto now = std::chrono::steady_clock::now();
++        if ((turns == 0) || (turns != seen_turns)) {
++            seen_turns = turns;
++            seen_time = now;
++            return false;
++        }
++
++        return (now - seen_time) > renderer_stall_limit;
++    }
++}
++#endif
++
  extern moodycamel::LightweightSemaphore graphics_shutdown_ready;
  
  void set_dummy_vi(bool odd);
-@@ -251,10 +407,25 @@ void vi_thread_func() {
+@@ -251,10 +446,31 @@ void vi_thread_func() {
              // printf("Skipping the next VI wait\n");
              next = std::chrono::high_resolution_clock::now();
          }
++#if ULTRAMODERN_VIS_WAIT_FOR_RENDERER
++        // No VI while the graphics thread is stalled in one action (renderer_stalled()); the next comes once it isn't.
++        while (renderer_stalled() && !exited) {
++            std::this_thread::sleep_for(1ms);
++        }
++#endif
 +#if defined(__EMSCRIPTEN_PTHREADS__)
 +        // A VI that ended on a frame leaves the timed wait below nothing to wait for. That wait stays where it was, so
 +        // a recomp's own patches to this loop still apply.
@@ -630,7 +703,7 @@ index ecdf156..cb7b4dd 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -269,12 +440,20 @@ void vi_thread_func() {
+@@ -269,12 +485,20 @@ void vi_thread_func() {
              events_context.action_queue.enqueue(DummyWorkloadAction{events_context.vi.get_next_state()->framebuffer});
          }
  
@@ -651,7 +724,7 @@ index ecdf156..cb7b4dd 100644
  
          // If the game has started, handle sending VI and AI events.
          if (ultramodern::is_game_started()) {
-@@ -309,6 +488,11 @@ void sp_complete() {
+@@ -309,6 +533,11 @@ void sp_complete() {
  }
  
  void dp_complete() {
@@ -663,6 +736,16 @@ index ecdf156..cb7b4dd 100644
      uint8_t* rdram = events_context.rdram;
      std::lock_guard lock{ events_context.message_mutex };
      ultramodern::enqueue_external_message_src(events_context.dp.mq, events_context.dp.msg, false, ultramodern::EventMessageSource::Dp);
+@@ -403,6 +632,9 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+     while (!exited) {
+         // Try to pull an action from the queue
+         Action action;
++#if ULTRAMODERN_VIS_WAIT_FOR_RENDERER
++        renderer_loop_turns++;
++#endif
+         if (events_context.action_queue.wait_dequeue_timed(action, 1ms)) {
+             // Determine the action type and act on it
+             if (const auto* task_action = std::get_if<SpTaskAction>(&action)) {
 diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
 index 45e1e87..74003ce 100644
 --- a/ultramodern/src/mesgqueue.cpp
