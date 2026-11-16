@@ -450,7 +450,7 @@ index 59acf58..5f20d52 100644
 +    target_compile_definitions(ultramodern PRIVATE ULTRAMODERN_VIS_WAIT_FOR_RENDERER=1)
 +endif()
 diff --git a/ultramodern/src/events.cpp b/ultramodern/src/events.cpp
-index ecdf156..0846b5c 100644
+index ecdf156..b2cf7b3 100644
 --- a/ultramodern/src/events.cpp
 +++ b/ultramodern/src/events.cpp
 @@ -39,7 +39,11 @@ struct DummyWorkloadAction {
@@ -508,7 +508,7 @@ index ecdf156..0846b5c 100644
      moodycamel::BlockingConcurrentQueue<OSTask*> sp_task_queue{};
      moodycamel::ConcurrentQueue<OSThread*> deleted_threads{};
  } events_context{};
-@@ -182,6 +205,189 @@ uint64_t total_vis = 0;
+@@ -182,6 +205,195 @@ uint64_t total_vis = 0;
  
  
  extern std::atomic_bool exited;
@@ -665,6 +665,12 @@ index ecdf156..0846b5c 100644
 +// attract demo it freed what the list in hand pointed at: it trapped in its heap allocator, the free list corrupt, or
 +// stopped drawing for good, 4-6 s after the hide in 3 plays of 3. Held after two VIs, as a console's RDP is done with a
 +// list a VI or two after it starts, it came through and went on into the demo.
++// Nor once the renderer has told the game the list in hand is done (renderer::rdp_done): it reads nothing more of RDRAM
++// for it, and what is left is its own work, the wait for a busy GPU included. Held there, the game's clock stopped for
++// nothing, and its sound with it, which nothing makes up afterwards: Rush 2049's page in Firefox, uncapped and its tab
++// hidden, held its VIs 91-105 times a play (9.5-11.9 s in all) and its sound ran 238,000-253,000 frames short, most of
++// it through a 5 s wait for a section's prebuilt shaders as its attract race starts; lifted at the RDP's done, it held 4
++// times (only before its sound starts) and lost none.
 +// Both sides touch only lines a game fork's own patches to this file leave alone (DKR-R-web's rewrite the VI messages'
 +// block and the graphics thread's actions).
 +namespace {
@@ -684,7 +690,7 @@ index ecdf156..0846b5c 100644
 +        static std::chrono::steady_clock::time_point seen_time{};
 +        const uint32_t turns = renderer_loop_turns.load();
 +        const auto now = std::chrono::steady_clock::now();
-+        if ((turns == 0) || (turns != seen_turns)) {
++        if ((turns == 0) || (turns != seen_turns) || ultramodern::renderer::rdp_done_pending()) {
 +            seen_turns = turns;
 +            seen_time = now;
 +            return false;
@@ -698,7 +704,7 @@ index ecdf156..0846b5c 100644
  extern moodycamel::LightweightSemaphore graphics_shutdown_ready;
  
  void set_dummy_vi(bool odd);
-@@ -251,10 +457,31 @@ void vi_thread_func() {
+@@ -251,10 +463,31 @@ void vi_thread_func() {
              // printf("Skipping the next VI wait\n");
              next = std::chrono::high_resolution_clock::now();
          }
@@ -730,7 +736,7 @@ index ecdf156..0846b5c 100644
          if (new_total_vis > total_vis + 1) {
              //printf("Skipped % " PRId64 " frames in VI interupt thread!\n", new_total_vis - total_vis - 1);
          }
-@@ -269,12 +496,20 @@ void vi_thread_func() {
+@@ -269,12 +502,20 @@ void vi_thread_func() {
              events_context.action_queue.enqueue(DummyWorkloadAction{events_context.vi.get_next_state()->framebuffer});
          }
  
@@ -751,7 +757,7 @@ index ecdf156..0846b5c 100644
  
          // If the game has started, handle sending VI and AI events.
          if (ultramodern::is_game_started()) {
-@@ -303,12 +538,24 @@ void vi_thread_func() {
+@@ -303,12 +544,24 @@ void vi_thread_func() {
  }
  
  void sp_complete() {
@@ -776,7 +782,7 @@ index ecdf156..0846b5c 100644
      uint8_t* rdram = events_context.rdram;
      std::lock_guard lock{ events_context.message_mutex };
      ultramodern::enqueue_external_message_src(events_context.dp.mq, events_context.dp.msg, false, ultramodern::EventMessageSource::Dp);
-@@ -369,6 +616,15 @@ void ultramodern::trigger_config_action() {
+@@ -369,6 +622,15 @@ void ultramodern::trigger_config_action() {
      events_context.action_queue.enqueue(UpdateConfigAction{});
  }
  
@@ -792,7 +798,7 @@ index ecdf156..0846b5c 100644
  std::atomic<ultramodern::renderer::SetupResult> renderer_setup_result = ultramodern::renderer::SetupResult::Success;
  std::atomic<ultramodern::renderer::GraphicsApi> renderer_chosen_api = ultramodern::renderer::GraphicsApi::Auto;
  
-@@ -403,6 +659,9 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -403,6 +665,9 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
      while (!exited) {
          // Try to pull an action from the queue
          Action action;
@@ -802,7 +808,7 @@ index ecdf156..0846b5c 100644
          if (events_context.action_queue.wait_dequeue_timed(action, 1ms)) {
              // Determine the action type and act on it
              if (const auto* task_action = std::get_if<SpTaskAction>(&action)) {
-@@ -442,6 +701,10 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
+@@ -442,6 +707,10 @@ void gfx_thread_func(uint8_t* rdram, moodycamel::LightweightSemaphore* thread_re
              else if (const auto* dummy_workload_action = std::get_if<DummyWorkloadAction>(&action)) {
                  renderer_context->send_dummy_workload(dummy_workload_action->fb_address);
              }
