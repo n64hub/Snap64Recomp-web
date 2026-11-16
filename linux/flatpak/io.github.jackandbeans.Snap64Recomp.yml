@@ -9,7 +9,8 @@
 # settings, the log, mods) goes to the sandbox's config folder,
 # ~/.var/app/io.github.jackandbeans.Snap64Recomp/config/Snap64Recomp/,
 # since /app is read-only (src/paths.cpp). @PRERELEASE@ is filled in by the
-# workflow (empty for a release).
+# workflow (empty for a release), and @BUILD_ID@ with the commit the
+# checkout is at.
 id: io.github.jackandbeans.Snap64Recomp
 runtime: org.freedesktop.Platform
 runtime-version: '24.08'
@@ -35,6 +36,10 @@ finish-args:
   - --filesystem=/media:ro
   - --filesystem=/run/media:ro
   - --filesystem=/mnt:ro
+  # The Steam art (src/steam_art.h): the port writes a Steam shortcut's art into
+  # config/grid under this folder and nowhere else in it. The account's number is
+  # not known here, so the permission cannot be any narrower.
+  - --filesystem=~/.local/share/Steam/userdata
 cleanup:
   - '*.a'
 modules:
@@ -43,6 +48,13 @@ modules:
     build-options:
       append-path: /usr/lib/sdk/llvm18/bin
       prepend-ld-library-path: /usr/lib/sdk/llvm18/lib
+      # The commit the program says it was built from, at its start and in
+      # its log. The source below comes without its .git, so the build
+      # cannot ask git and is told here (tools/build_id.cmake reads this
+      # at every build); until 1.1.7 nothing told it, and the Flatpak said
+      # "built from commit unknown". Left empty, it says "unknown".
+      env:
+        SNAP_BUILD_ID: "@BUILD_ID@"
     build-commands:
       - >
         cmake -S . -B build-flatpak -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -52,6 +64,12 @@ modules:
       # The flat folder of the tarball, into /app/bin: the program finds its
       # shipped files beside itself there.
       - cmake --install build-flatpak --prefix /app/bin
+      # The logo's tile at every size from 16 to 256 (tools/icon_gen.py).
+      - install -Dm644 src/snap64-16.png /app/share/icons/hicolor/16x16/apps/${FLATPAK_ID}.png
+      - install -Dm644 src/snap64-32.png /app/share/icons/hicolor/32x32/apps/${FLATPAK_ID}.png
+      - install -Dm644 src/snap64-48.png /app/share/icons/hicolor/48x48/apps/${FLATPAK_ID}.png
+      - install -Dm644 src/snap64-64.png /app/share/icons/hicolor/64x64/apps/${FLATPAK_ID}.png
+      - install -Dm644 src/snap64-128.png /app/share/icons/hicolor/128x128/apps/${FLATPAK_ID}.png
       - install -Dm644 src/snap64.png /app/share/icons/hicolor/256x256/apps/${FLATPAK_ID}.png
       - install -Dm644 linux/flatpak/${FLATPAK_ID}.desktop /app/share/applications/${FLATPAK_ID}.desktop
       - install -Dm644 linux/flatpak/${FLATPAK_ID}.metainfo.xml /app/share/metainfo/${FLATPAK_ID}.metainfo.xml

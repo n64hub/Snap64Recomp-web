@@ -20,6 +20,8 @@
 #      N64ModernRuntime: the live recompiler's code registered for unwinding off on wasm (it has none), offline mods
 #      still refused, macOS's thread policy beside the web's thread names, ULTRAMODERN_LIBULTRA_THREAD_STOP, the timer
 #      thread polling for a near timer beside the port's game speed and its never-destroyed queue.
+#      plume: its Vulkan backend (plume_vulkan.cpp), which a page never compiles, is left out of the web's patch and
+#      merged with nothing (unbuilt, below).
 # 2. N64Recomp and RSPRecomp, built natively from the patched checkout: the page needs the code the web-patched
 #    N64Recomp writes.
 # 3. The decomp's ELF (ethteck/pokemonsnap at the commit BUILDING.md names, IDO through its own setup), relinked with
@@ -56,19 +58,23 @@ step "Patches"
 # <name> <checkout> [files left to patches/web/<name>.patch, merged from the commit files.txt names]
 shared() { awk -v p="$1" '!/^#/ && $1 == p { printf "%s ", $2 }' patches/web/files.txt; }
 merged_from="$(sed -n 's/^# merged from N64Recomp-browser //p' patches/web/files.txt)"
+# Files a page never compiles, left out of the web's patch where Snap64 Recomp's own change meets it, with nothing in
+# their place and nothing merged in since: plume's Vulkan backend (a page draws with WebGPU), where the port's Vulkan
+# call markers and scissor guards meet plume-web's desktop fixes for Mesa's lavapipe, which no build of this fork applies.
+unbuilt() { case "$1" in plume) printf 'plume_vulkan.cpp ' ;; esac; }
 web_patches="rt64 lib/rt64 $(shared rt64)
 plume lib/rt64/src/contrib/plume
 hlslpp lib/rt64/src/contrib/hlslpp
 N64ModernRuntime lib/N64ModernRuntime $(shared N64ModernRuntime)
 N64Recomp lib/N64ModernRuntime/N64Recomp"
-stamp="$(git -C $browser rev-parse HEAD) $(git -C lib/rt64 rev-parse HEAD) $(git -C lib/N64ModernRuntime rev-parse HEAD) $( (cat patches/web/*.patch patches/web/files.txt; echo "$web_patches") | sha1sum | cut -c1-40)"
+stamp="$(git -C $browser rev-parse HEAD) $(git -C lib/rt64 rev-parse HEAD) $(git -C lib/N64ModernRuntime rev-parse HEAD) $( (cat patches/web/*.patch patches/web/files.txt; echo "$web_patches"; unbuilt plume) | sha1sum | cut -c1-40)"
 if [[ "$(cat $prep/web-patched 2> /dev/null)" != "$stamp" ]]; then
     for s in lib/rt64 lib/N64ModernRuntime; do
         git -C $s submodule foreach --recursive -q 'git reset -q --hard && git clean -fdq'
         git -C $s reset -q --hard && git -C $s clean -fdq
     done
     while read -r name checkout skip; do
-        cmake -P $browser/patches/apply.cmake "$name" "$checkout" $skip
+        cmake -P $browser/patches/apply.cmake "$name" "$checkout" $skip $(unbuilt "$name")
         [[ ! -f patches/web/$name.patch ]] || git -C "$checkout" apply --whitespace=nowarn "$root/patches/web/$name.patch"
         [[ -z "$skip" ]] || cmake -P $browser/patches/apply.cmake "$name" "$checkout" --since "$merged_from" $skip
     done <<< "$web_patches"

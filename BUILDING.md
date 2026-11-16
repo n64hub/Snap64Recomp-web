@@ -491,7 +491,10 @@ files:
   at a time is a `flock` on `snap64.lock` in the data directory. The Snap
   Station's relaunch `execv`s `/proc/self/exe` in place, keeping the pid
   so Steam keeps the game as running, and the sheet's folder opens with
-  `xdg-open` (`src/main.cpp`, `src/snap_station.cpp`).
+  `xdg-open` (`src/main.cpp`, `src/snap_station.cpp`). Inside gamescope the X
+  connection stays open across that `execv`, so the game is never without a
+  window, and the new image closes it once the game has run for a moment
+  (`src/relaunch_window.h`).
 * The data directory is the executable's when it can be written, else
   `$XDG_CONFIG_HOME/Snap64Recomp` (`~/.config/Snap64Recomp`);
   `SNAP_DATA_DIR` names one outright on every platform (`src/paths.cpp`,
@@ -1150,12 +1153,36 @@ on the day named.
   on the same APK from a fresh install, and the unsigned release APK
   passed the package check, 14 of 14.
 
+* Google's emulator, 2026-11-05, the 1.1.7 tree (the debug APK of both
+  ABIs): `tools/android_check.py`, every stage, 114 of 114 in 1344 seconds,
+  and the Android-only paths 11 of 11 on the same APK. The autosave stage is
+  new: with the Autosave row On, the game's own save ran as the lab opened,
+  the file changed with its checksum right, and the old file was kept as
+  `.bak`; Off, the file stayed byte for byte. The eval tape falls out of step
+  on the emulator before Oak's check (12 of its 20 photos in this run), so
+  `SNAP_AUTOSAVE_TEST` makes the change the lab finds.
+
+* Google's emulator, 2026-11-13 to 2026-11-15, the 1.1.8 tree (test
+  builds of both ABIs). With the two fixes for the AYN Thor (issue 36):
+  `tools/android_check.py`, every stage, 114 of 114 in 1351 seconds, and
+  `tools/android/pool_check.py`, 23 of 23. On a signed test build with the
+  crash record: `tools/android/crash_check.py`, 42 of 42. With the fix for
+  issue 39: `tools/android/catch_check.py`, 16 of 16, and that build,
+  signed, installed over a released 1.1.7 that had been stuck the
+  reporter's way: the next start lowered Anti-Aliasing by itself and
+  reached the title, with the save untouched.
+
+* An AYN Thor (Adreno 740), by its owner, 2026-11-14, a signed test build
+  with both fixes for issue 36: the game ran and the first course was
+  played.
+
 Not run anywhere yet: a real pad, wired or Bluetooth; the Button Setup
 page's capture of a press on Android (its code is shared with the PC);
 the sound, heard by a person;
 the touch controls on a real screen; the touch controls and the lifecycle
-work on a real device; any GPU but the Adreno 830 on a real device (Mali,
-PowerVR and older Adreno chips are untried); Android 10 to 14 (the app's
+work on a real device; any GPU but the Adreno 830 and, by a player, the
+Adreno 740 on a real device (Mali, PowerVR and the other Adreno chips are
+untried); Android 10 to 14 (the app's
 floor is Android 10, and both the emulator and the phone ran Android 15).
 
 ## What a clean checkout is missing

@@ -81,6 +81,11 @@ add_custom_command(
 set_source_files_properties("${SNAP_ASPMAIN_CPP}" PROPERTIES COMPILE_OPTIONS "-w")
 
 configure_file("${CMAKE_SOURCE_DIR}/src/version.h.in" "${CMAKE_BINARY_DIR}/generated/version.h" @ONLY)
+# The commit a desktop build is made from (tools/build_id.cmake, run at every build) is not a page's: it would put the
+# fork's commit into the .wasm, so a commit that changes nothing a page runs (a doc) would build other bytes, and
+# N64Recomp-browser's tools/publish_pages.sh publishes a page again only when its bytes change. The hub's gh-pages
+# commit names the main a page was built from.
+file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/generated/build_id.h" CONTENT "#define SNAP_BUILD_ID \"page\"\n")
 
 # CMakeLists.txt's SNAP_SOURCES.
 add_executable(Snap64Recomp
@@ -91,6 +96,8 @@ add_executable(Snap64Recomp
     src/rom_picker.cpp
     src/fast_forward.cpp
     src/steam_deck.cpp
+    src/steam_art.cpp
+    src/relaunch_window.cpp
     src/mod_api.cpp
     src/mod_data_api.cpp
     src/mod_time_api.cpp
@@ -111,6 +118,7 @@ add_executable(Snap64Recomp
     src/rect_tags.cpp
     src/lab_monitor.cpp
     src/save_file.cpp
+    src/autosave.cpp
     src/rect_census.cpp
     src/fx_tags.cpp
     src/host_hooks.cpp
