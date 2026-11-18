@@ -83,8 +83,7 @@ set_source_files_properties("${SNAP_ASPMAIN_CPP}" PROPERTIES COMPILE_OPTIONS "-w
 configure_file("${CMAKE_SOURCE_DIR}/src/version.h.in" "${CMAKE_BINARY_DIR}/generated/version.h" @ONLY)
 # The commit a desktop build is made from (tools/build_id.cmake, run at every build) is not a page's: it would put the
 # fork's commit into the .wasm, so a commit that changes nothing a page runs (a doc) would build other bytes, and
-# N64Recomp-browser's tools/publish_pages.sh publishes a page again only when its bytes change. The hub's gh-pages
-# commit names the main a page was built from.
+# a page is published again only when its bytes change.
 file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/generated/build_id.h" CONTENT "#define SNAP_BUILD_ID \"page\"\n")
 
 # CMakeLists.txt's SNAP_SOURCES.

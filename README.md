@@ -23,8 +23,7 @@
 **Play it in the browser: https://n64hub.com/pokemon-snap/**, with your own dump of Pokémon Snap (US),
 picked on the page and kept in the browser. It needs WebGPU (Chrome or Edge 113 and up, or Firefox). The page is the
 game with the port's menus and settings, without mods; the save, the Snap Station's sheets and exported photos stay
-in the browser's storage (docs/WEB.md says why). It is built from this branch and published with N64Recomp-browser's
-`tools/publish_page.sh`, so it can be a commit or two behind.
+in the browser's storage (docs/WEB.md says why). It is built from this branch, so it can be a commit or two behind.
 
 Snap64 Recomp is a native PC port of Pokémon Snap (Nintendo 64, US release)
 for Windows, Linux, the Steam Deck and macOS. It is made with
