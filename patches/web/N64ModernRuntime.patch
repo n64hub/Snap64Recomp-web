@@ -820,7 +820,7 @@ index ecdf156..b2cf7b3 100644
      }
  
 diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
-index 45e1e87..74003ce 100644
+index 45e1e87..4fda7e0 100644
 --- a/ultramodern/src/mesgqueue.cpp
 +++ b/ultramodern/src/mesgqueue.cpp
 @@ -16,6 +16,14 @@ struct QueuedMessage {
@@ -857,7 +857,7 @@ index 45e1e87..74003ce 100644
      }
  }
  
-@@ -84,25 +95,61 @@ extern "C" void snap_run_clock_resume();
+@@ -84,26 +95,62 @@ extern "C" void snap_run_clock_resume();
  
  void ultramodern::wait_for_external_message(RDRAM_ARG1) {
      QueuedMessage to_send;
@@ -889,10 +889,10 @@ index 45e1e87..74003ce 100644
          if (!do_send(PASS_RDRAM to_send.mq, to_send.mesg, to_send.jam, false) && to_send.requeue_if_blocked) {
 -            external_messages.enqueue(to_send);
 +            REQUEUE_BLOCKED_MESSAGE(to_send);
-+        }
-+    }
-+}
-+
+         }
+     }
+ }
+ 
 +#if ULTRAMODERN_HOLD_BLOCKED_MESSAGES
 +// An external message whose queue is full and that is to be sent again waits here, and is tried again before any other
 +// at a game thread's next OS call or the idle thread's next wait. Put back into external_messages, the idle thread
@@ -913,14 +913,29 @@ index 45e1e87..74003ce 100644
 +            sent_any = true;
 +        } else {
 +            i++;
-         }
-     }
++        }
++    }
 +    return sent_any;
- }
++}
 +#endif
- 
++
  extern "C" void osCreateMesgQueue(RDRAM_ARG PTR(OSMesgQueue) mq_, PTR(OSMesg) msg, s32 count) {
      OSMesgQueue *mq = TO_PTR(OSMesgQueue, mq_);
+     mq->blocked_on_recv = NULLPTR;
+@@ -127,6 +174,13 @@ s32 MQ_IS_FULL(OSMesgQueue* mq) {
+ }
+ 
+ bool do_send(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, bool jam, bool block) {
++    // An event no queue was set for sends nothing, as libultra's event dispatch does: a game that never calls
++    // osSetEventMesg for an event (Excitebike 64's scheduler sets none for OS_EVENT_SP and waits for the DP alone)
++    // would otherwise have its message sent to a null queue, which crashes the thread that receives it. It counts as
++    // sent, so nothing requeues it.
++    if (mq_ == NULLPTR) {
++        return true;
++    }
+     OSMesgQueue* mq = TO_PTR(OSMesgQueue, mq_);
+     if (!block) {
+         // If non-blocking, fail if the queue is full.
 diff --git a/ultramodern/src/threads.cpp b/ultramodern/src/threads.cpp
 index b2e375c..8fbc05f 100644
 --- a/ultramodern/src/threads.cpp
